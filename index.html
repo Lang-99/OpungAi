@@ -208,7 +208,7 @@ body.light .input-area { background:rgba(248,249,250,.9); }
       <div class="s-foot">
         <div class="m-badge">
           <div class="mdot"></div>
-          <span>Opung Engine v1.1</span>
+          <span>Opung Engine v3.5</span>
         </div>
         <div class="credit">
           Opung AI · by <span>lngit22</span>
@@ -301,7 +301,6 @@ body.light .input-area { background:rgba(248,249,250,.9); }
       if(localStorage.getItem('opung_theme') === 'light') document.body.classList.add('light');
 
       // ======================== STRICT ANTI-JAILBREAK SYSTEM ========================
-      // Pendeteksi pola instruksi berbahaya, manipulasi sistem, bypass, atau eksploitasi prompt
       const SHADOW_JAILBREAK_PATTERNS = [
         "danial", "dan mode", "dev mode", "jailbreak", "override", "system prompt", "abaikan instruksi", 
         "ignore previous", "you are now a", "pretend to be", "acting as", "bypass", "rule bypass", 
@@ -619,24 +618,25 @@ body.light .input-area { background:rgba(248,249,250,.9); }
       }
 
       // ======================== SECURED VERCEL API INTERACTION ========================
-      async function callVercelAPI(text, mode) {
-        // Mengalihkan pemrosesan backend yang aman ke serverless route Vercel
-        // API Key disembunyikan sepenuhnya di Vercel Dashboard (client tidak pernah tahu)
+      async function callVercelAPI(messagesArray, mode) {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            messages: [{ role: 'user', content: text }],
+            messages: messagesArray,
             mode: mode
           })
         });
         
         if (!response.ok) {
-          throw new Error('Gagal menghubungi backend Vercel.');
+          const errPayload = await response.json().catch(() => ({}));
+          throw new Error(errPayload.error || 'Gagal menghubungi backend Vercel.');
         }
         const data = await response.json();
+        
+        // Sesuaikan ekstraksi parameter dengan format balasan Agnes AI standar
         return data.choices?.[0]?.message?.content || data.content || '';
       }
 
@@ -656,7 +656,7 @@ body.light .input-area { background:rgba(248,249,250,.9); }
           saveToLS(); renderHistory();
           appendUserBubble(text, now);
 
-          const jailbreakReply = "Deteksi aktivitas manipulasi sistem sistem keamanan terdeteksi. Akses ditolak.";
+          const jailbreakReply = "Deteksi aktivitas manipulasi sistem keamanan terdeteksi. Akses ditolak.";
           chat.msgs.push({role:'assistant', content:jailbreakReply, time:getTime()});
           saveToLS();
           appendAIBubble(jailbreakReply, getTime(), true, "System Security");
@@ -686,33 +686,13 @@ body.light .input-area { background:rgba(248,249,250,.9); }
         showTyping('Opung AI');
         
         try{
-          let responseContent = "";
-          try {
-            // Coba panggil Vercel API Route yang menyembunyikan API key
-            responseContent = await callVercelAPI(text, currentMode);
-          } catch(apiErr) {
-            // Simulasi tanggapan offline yang dipoles jika dibuka di sandbox lokal / preview non-Vercel
-            await new Promise(r=>setTimeout(r,1200));
-            if(currentMode === 'coding') {
-              responseContent = `Berikut adalah contoh solusi pemrograman bersih dari Opung AI Coding Expert:
-\`\`\`javascript
-// Dioptimalkan untuk efisiensi eksekusi
-const hitungKecepatanData = (jarak, waktu) => {
-  if (waktu <= 0) return 0;
-  return jarak / waktu;
-};
-console.log(hitungKecepatanData(100, 2));
-\`\`\`
-Tautkan website ini ke repository GitHub Anda dan sambungkan di Vercel dengan environment variable \`AGNES_AI_API_KEY\` agar backend terhubung secara otomatis! 🗿`;
-            } else if(currentMode === 'deep') {
-              responseContent = `### Hasil Analisis DeepSearch Opung AI:
-1. **Analisis Konteks**: Topik yang diajukan memerlukan investigasi data yang terstruktur.
-2. **Korelasi Sistem**: Pentingnya penyelarasan model backend demi kestabilan runtime.
-3. **Konklusi**: Pastikan deployment pada platform Vercel Anda sudah terhubung secara dinamis.`;
-            } else {
-              responseContent = `Halo! Saya Opung AI, asisten virtual generasi baru. Pertanyaan Anda sangat menarik! Pastikan untuk mengunggah template web ini ke platform hosting pilihan Anda agar fitur cloud database berjalan sempurna. 🗿`;
-            }
-          }
+          // Persiapkan struktur list pesan untuk diteruskan ke backend API
+          const payloadMessages = chat.msgs.map(m => ({
+            role: m.role,
+            content: m.content
+          }));
+
+          const responseContent = await callVercelAPI(payloadMessages, currentMode);
 
           hideTyping();
           const aiTime=getTime();
